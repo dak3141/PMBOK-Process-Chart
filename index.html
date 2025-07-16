@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive PMBOK Process Chart with Gemini AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #4f46e5;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4f46e5;
+        }
+        .highlight {
+            background-color: #fef3c7;
+            border-radius: 4px;
+            padding: 2px;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: 180px repeat(5, 1fr); /* Increased width for Armenian text */
+            gap: 8px;
+        }
+        .grid-header, .grid-cell, .ka-header {
+            padding: 12px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            min-height: 120px;
+        }
+        .grid-header {
+            font-weight: 600;
+            text-align: center;
+            background-color: #e0e7ff;
+            justify-content: center;
+            align-items: center;
+        }
+        .ka-header {
+            font-weight: 600;
+            background-color: #eef2ff;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .process-item {
+            font-size: 0.875rem;
+            margin-bottom: 8px;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background-color 0.2s ease-in-out, transform 0.2s;
+            cursor: pointer;
+        }
+        .process-item:hover {
+            background-color: #f0f0f0;
+            transform: translateY(-2px);
+        }
+        .process-number {
+            color: #6b7280;
+            font-size: 0.75rem;
+            margin-right: 4px;
+        }
+        #aiModal {
+            transition: opacity 0.3s ease;
+        }
+        .spinner {
+            border-top-color: #4f46e5;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .grid-container {
+                grid-template-columns: 1fr;
+            }
+            .grid-header, .ka-header {
+                grid-column: 1 / -1;
+            }
+            .grid-header:not(:first-child){
+                display: none;
+            }
+            .ka-header {
+                margin-top: 1rem;
+            }
+            .grid-cell {
+                border-left: 3px solid #e0e7ff;
+                padding-left: 20px;
+                position: relative;
+            }
+            .grid-cell::before {
+                content: attr(data-process-group);
+                position: absolute;
+                top: -20px;
+                left: 0;
+                font-weight: 600;
+                color: #4338ca;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800" data-lang-en="PMBOK Process Chart" data-lang-am="PMBOK Գործընթացների Աղյուսակ">PMBOK Process Chart</h1>
+                <p class="text-gray-500 mt-1" data-lang-en="Knowledge Areas vs. Process Groups" data-lang-am="Գիտելիքի Ոլորտներ vs. Գործընթացների Խմբեր">Knowledge Areas vs. Process Groups</p>
+            </div>
+            <div class="flex items-center space-x-4 mt-4 md:mt-0 w-full md:w-auto">
+                <input type="text" id="searchInput" placeholder="Search processes..." class="w-full md:w-48 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-medium text-gray-700">AM</span>
+                    <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="toggle" id="languageToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                        <label for="languageToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                    </div>
+                    <span class="text-sm font-medium text-gray-700">EN</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div id="pmbokGrid" class="grid-container">
+            <!-- Grid will be generated by JS -->
+        </div>
+    </div>
+
+    <!-- AI Explanation Modal -->
+    <div id="aiModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center hidden pointer-events-none opacity-0">
+        <div class="relative mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <h3 id="modalTitle" class="text-lg text-center leading-6 font-medium text-gray-900"></h3>
+                <div class="mt-4 px-7 py-3">
+                    <div id="modalContent" class="text-sm text-gray-700 text-left h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
+                        <!-- AI content will be loaded here -->
+                    </div>
+                     <div id="modalLoading" class="flex justify-center items-center h-64 border rounded-md p-3 bg-gray-50 hidden">
+                        <div class="spinner w-12 h-12 rounded-full border-4 border-gray-200"></div>
+                    </div>
+                </div>
+                <div class="items-center px-4 py-3 space-y-2">
+                    <div class="flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0">
+                        <button id="generateExplanationBtn" class="flex-1 px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            ✨ Բացատրություն
+                        </button>
+                        <button id="generateItoBtn" class="flex-1 px-4 py-2 bg-purple-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                            ✨ Ցույց տալ ՄԳԳ-ները
+                        </button>
+                        <button id="generateExampleBtn" class="flex-1 px-4 py-2 bg-teal-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                           ✨ Բերել իրական օրինակ
+                        </button>
+                    </div>
+                    <button id="closeModalBtn" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-300 focus:outline-none">
+                        Փակել
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA (Updated with corrected Armenian phrases) ---
+        const pmbokData = {
+            processGroups: {
+                en: ["Initiating", "Planning", "Executing", "Monitoring & Controlling", "Closing"],
+                am: ["Նախաձեռնում", "Պլանավորում", "Իրականացում", "Մոնիթորինգ և վերահսկում", "Փակում"]
+            },
+            knowledgeAreas: [
+                { name: { en: "Integration Management", am: "Ինտեգրացիոն կառավարում" }, processes: { 0: [{ id: "1.1", en: "Develop Project Charter", am: "Նախագծի մեկնարկային փաստաթղթի մշակում" }], 1: [{ id: "1.2", en: "Develop Project Management Plan", am: "Նախագծի կառավարման պլանի մշակում" }], 2: [{ id: "1.3", en: "Direct and Manage Project Work", am: "Նախագծի աշխատանքների ղեկավարում և կառավարում" }, { id: "1.4", en: "Manage Project Knowledge", am: "Նախագծի գիտելիքների կառավարում" }], 3: [{ id: "1.5", en: "Monitor and Control Project Work", am: "Նախագծի աշխատանքների մոնիթորինգ և վերահսկում" }, { id: "1.6", en: "Perform Integrated Change Control", am: "Փոփոխությունների ինտեգրված վերահսկման իրականացում" }], 4: [{ id: "1.7", en: "Close Project or Phase", am: "Նախագծի կամ փուլի փակում" }] } },
+                { name: { en: "Scope Management", am: "Ծավալի կառավարում" }, processes: { 1: [{ id: "2.1", en: "Plan Scope Management", am: "Ծավալի կառավարման պլանավորում" }, { id: "2.2", en: "Collect Requirements", am: "Պահանջների հավաքագրում" }, { id: "2.3", en: "Define Scope", am: "Ծավալի սահմանում" }, { id: "2.4", en: "Create WBS", am: "Աշխատանքների բաշխման կառուցվածքի ստեղծում (WBS)" }], 3: [{ id: "2.5", en: "Validate Scope", am: "Շրջանակի (կատարված աշխատանքներ) հաստատում" }, { id: "2.6", en: "Control Scope", am: "Շրջանակի վերահսկում" }] } },
+                { name: { en: "Schedule Management", am: "Ժամանակացույցի կառավարում" }, processes: { 1: [{ id: "3.1", en: "Plan Schedule Management", am: "Ժամանակացույցի կառավարման պլանավորում" }, { id: "3.2", en: "Define Activities", am: "Գործողությունների սահմանում" }, { id: "3.3", en: "Sequence Activities", am: "Գործողությունների հաջորդականացում" }, { id: "3.4", en: "Estimate Activity Durations", am: "Գործողությունների տևողությունների գնահատում" }, { id: "3.5", en: "Develop Schedule", am: "Ժամանակացույցի մշակում" }], 3: [{ id: "3.6", en: "Control Schedule", am: "Ժամանակացույցի վերահսկում" }] } },
+                { name: { en: "Cost Management", am: "Ծախսերի կառավարում" }, processes: { 1: [{ id: "4.1", en: "Plan Cost Management", am: "Ծախսերի կառավարման պլանավորում" }, { id: "4.2", en: "Estimate Costs", am: "Ծախսերի գնահատում" }, { id: "4.3", en: "Determine Budget", am: "Բյուջեի կազմում" }], 3: [{ id: "4.4", en: "Control Costs", am: "Ծախսերի վերահսկում" }] } },
+                { name: { en: "Quality Management", am: "Որակի կառավարում" }, processes: { 1: [{ id: "5.1", en: "Plan Quality Management", am: "Որակի կառավարման պլանավորում" }], 2: [{ id: "5.2", en: "Manage Quality", am: "Որակի կառավարում" }], 3: [{ id: "5.3", en: "Control Quality", am: "Որակի վերահսկում" }] } },
+                { name: { en: "Resource Management", am: "Ռեսուրսների կառավարում" }, processes: { 1: [{ id: "6.1", en: "Plan Resource Management", am: "Ռեսուրսների կառավարման պլանավորում" }, { id: "6.2", en: "Estimate Activity Resources", am: "Գործողությունների ռեսուրսների գնահատում" }], 2: [{ id: "6.3", en: "Acquire Resources", am: "Ռեսուրսների ձեռքբերում" }, { id: "6.4", en: "Develop Team", am: "Թիմի զարգացում" }, { id: "6.5", en: "Manage Team", am: "Թիմի կառավարում" }], 3: [{ id: "6.6", en: "Control Resources", am: "Ռեսուրսների վերահսկում" }] } },
+                { name: { en: "Communications Management", am: "Հաղորդակցության կառավարում" }, processes: { 1: [{ id: "7.1", en: "Plan Communications Management", am: "Հաղորդակցության կառավարման պլանավորում" }], 2: [{ id: "7.2", en: "Manage Communications", am: "Հաղորդակցությունների կառավարում" }], 3: [{ id: "7.3", en: "Monitor Communications", am: "Հաղորդակցությունների մոնիթորինգ" }] } },
+                { name: { en: "Risk Management", am: "Ռիսկերի կառավարում" }, processes: { 1: [{ id: "8.1", en: "Plan Risk Management", am: "Ռիսկերի կառավարման պլանավորում" }, { id: "8.2", en: "Identify Risks", am: "Ռիսկերի բացահայտում" }, { id: "8.3", en: "Perform Qualitative Risk Analysis", am: "Ռիսկերի որակական վերլուծության իրականացում" }, { id: "8.4", en: "Perform Quantitative Risk Analysis", am: "Ռիսկերի քանակական վերլուծության իրականացում" }, { id: "8.5", en: "Plan Risk Responses", am: "Ռիսկերին արձագանքման պլանավորում" }], 2: [{ id: "8.6", en: "Implement Risk Responses", am: "Ռիսկերին արձագանքման իրականացում" }], 3: [{ id: "8.7", en: "Monitor Risks", am: "Ռիսկերի մոնիթորինգ" }] } },
+                { name: { en: "Procurement Management", am: "Գնումների կառավարում" }, processes: { 1: [{ id: "9.1", en: "Plan Procurement Management", am: "Գնումների կառավարման պլանավորում" }], 2: [{ id: "9.2", en: "Conduct Procurements", am: "Գնումների իրականացում" }], 3: [{ id: "9.3", en: "Control Procurements", am: "Գնումների վերահսկում" }] } },
+                { name: { en: "Stakeholder Management", am: "Շահակիցների կառավարում" }, processes: { 0: [{ id: "10.1", en: "Identify Stakeholders", am: "Շահակիցների բացահայտում" }], 1: [{ id: "10.2", en: "Plan Stakeholder Engagement", am: "Շահակիցների ներգրավվածության պլանավորում" }], 2: [{ id: "10.3", en: "Manage Stakeholder Engagement", am: "Շահակիցների ներգրավվածության կառավարում" }], 3: [{ id: "10.4", en: "Monitor Stakeholder Engagement", am: "Շահակիցների ներգրավման մոնիթորինգ" }] } },
+            ]
+        };
+
+        // --- DOM ELEMENTS ---
+        const gridContainer = document.getElementById('pmbokGrid');
+        const languageToggle = document.getElementById('languageToggle');
+        const searchInput = document.getElementById('searchInput');
+        const modal = document.getElementById('aiModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalContent = document.getElementById('modalContent');
+        const modalLoading = document.getElementById('modalLoading');
+        const generateExplanationBtn = document.getElementById('generateExplanationBtn');
+        const generateItoBtn = document.getElementById('generateItoBtn');
+        const generateExampleBtn = document.getElementById('generateExampleBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+
+        // --- STATE ---
+        let currentLang = 'am';
+        let selectedProcess = null;
+
+        // --- FUNCTIONS ---
+
+        function renderGrid() {
+            const lang = currentLang;
+            const searchTerm = searchInput.value.toLowerCase();
+            gridContainer.innerHTML = '';
+            gridContainer.appendChild(document.createElement('div'));
+            pmbokData.processGroups[lang].forEach(pg => {
+                const headerCell = document.createElement('div');
+                headerCell.className = 'grid-header';
+                headerCell.textContent = pg;
+                gridContainer.appendChild(headerCell);
+            });
+            pmbokData.knowledgeAreas.forEach(ka => {
+                const kaHeader = document.createElement('div');
+                kaHeader.className = 'ka-header';
+                kaHeader.textContent = ka.name[lang];
+                gridContainer.appendChild(kaHeader);
+                for (let i = 0; i < 5; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.setAttribute('data-process-group', pmbokData.processGroups[lang][i]);
+                    const processes = ka.processes[i] || [];
+                    let cellHTML = '';
+                    processes.forEach(p => {
+                        let processName = p[lang];
+                        if (searchTerm && processName.toLowerCase().includes(searchTerm)) {
+                            const regex = new RegExp(`(${searchTerm})`, 'gi');
+                            processName = processName.replace(regex, `<span class="highlight">$1</span>`);
+                        }
+                        cellHTML += `
+                            <div class="process-item" data-process-en="${p.en}" data-process-am="${p.am}" data-process-id="${p.id}">
+                                <span class="process-number">${p.id}</span>
+                                <span>${processName}</span>
+                            </div>`;
+                    });
+                    cell.innerHTML = cellHTML;
+                    gridContainer.appendChild(cell);
+                }
+            });
+        }
+
+        function switchLanguage() {
+            currentLang = languageToggle.checked ? 'en' : 'am';
+            document.querySelectorAll('[data-lang-en]').forEach(el => {
+                el.textContent = el.getAttribute(`data-lang-${currentLang}`);
+            });
+            searchInput.placeholder = currentLang === 'en' ? 'Search processes...' : 'Որոնել գործընթացներ...';
+            renderGrid();
+        }
+
+        function openModal(e) {
+            const processElement = e.target.closest('.process-item');
+            if (!processElement) return;
+            selectedProcess = {
+                en: processElement.dataset.processEn,
+                am: processElement.dataset.processAm,
+                id: processElement.dataset.processId
+            };
+            modalTitle.textContent = `${selectedProcess.id} - ${selectedProcess[currentLang]}`;
+            modalContent.innerHTML = `<p class="text-gray-500 text-center">Ընտրեք գործողություններից մեկը՝ AI-ի օգնությամբ տեղեկություն ստանալու համար։</p>`;
+            modalContent.classList.remove('hidden');
+            modalLoading.classList.add('hidden');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.classList.add('pointer-events-auto');
+            }, 10);
+        }
+
+        function closeModal() {
+            modal.classList.add('opacity-0');
+            modal.classList.remove('pointer-events-auto');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        async function callGeminiAPI(prompt) {
+            if (!selectedProcess) return;
+
+            modalContent.classList.add('hidden');
+            modalLoading.classList.remove('hidden');
+
+            const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiKey = ""; // Provided by environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+                const result = await response.json();
+                if (result.candidates && result.candidates[0]?.content?.parts[0]) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    modalContent.innerHTML = text.replace(/\n/g, '<br>');
+                } else {
+                    throw new Error("Invalid response structure from API.");
+                }
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                modalContent.innerHTML = `<p class="text-red-500">Սխալ տեղի ունեցավ։ Խնդրում ենք փորձել մի փոքր ուշ։</p>`;
+            } finally {
+                modalLoading.classList.add('hidden');
+                modalContent.classList.remove('hidden');
+            }
+        }
+
+        function getGeminiExplanation() {
+            const prompt = `As an expert project management tutor, explain the PMBOK process: "${selectedProcess.en}". Describe its main purpose and key activities. Explain why it's important for a project manager. Keep the explanation concise, clear, and easy for a beginner to understand. Format the response with paragraphs.`;
+            callGeminiAPI(prompt);
+        }
+
+        function getGeminiIto() {
+            const prompt = `As a PMP certified expert, list the key Inputs, Tools & Techniques, and Outputs (ITOs) for the PMBOK process: "${selectedProcess.en}". Present them clearly with bold headings for **Inputs**, **Tools & Techniques**, and **Outputs**. Be concise and focus on the most important ones for a student to learn. Use bullet points for each item.`;
+            callGeminiAPI(prompt);
+        }
+
+        function getGeminiExample() {
+            const prompt = `As a project management instructor, provide a simple, real-world example of the PMBOK process: "${selectedProcess.en}". The example should be easy to understand for a beginner. Describe a scenario and how this process is applied within it. Start with a bold heading for the scenario, for example: **Scenario: Building a Website**.`;
+            callGeminiAPI(prompt);
+        }
+
+        // --- EVENT LISTENERS ---
+        languageToggle.addEventListener('change', switchLanguage);
+        searchInput.addEventListener('input', renderGrid);
+        gridContainer.addEventListener('click', openModal);
+        closeModalBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+        generateExplanationBtn.addEventListener('click', getGeminiExplanation);
+        generateItoBtn.addEventListener('click', getGeminiIto);
+        generateExampleBtn.addEventListener('click', getGeminiExample);
+
+        // --- INITIAL RENDER ---
+        switchLanguage();
+    </script>
+</body>
+</html>
